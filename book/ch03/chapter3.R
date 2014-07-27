@@ -125,7 +125,7 @@ colnames(rr.df) <- c("Risk", "Reliability", "Freq")
 levelplot(Freq~Risk*Reliability, data=rr.df, main="Risk ~ Reliability", ylab="Reliability",
           xlab="Risk", shrink=c(0.5,1),col.regions=colorRampPalette(c("#dcefdc","#990000"))(20))
 
-# Listing 3-22
+# Listing 3-21
 # Generate same plot from random sample
 # ---------------------------------------
 set.seed(1492)
@@ -135,3 +135,40 @@ tmp.df = data.frame(table(factor(rsk),factor(rel)))
 colnames(tmp.df) <- c("Risk","Reliability","Freq")
 levelplot(Freq~Risk*Reliability, data=tmp.df, main="Risk ~ Reliability", ylab="Reliability",
           xlab="Risk", shrink=c(0.5,1),col.regions=colorRampPalette(c("#dcefdc","#990000"))(20))
+
+# Listing 3-22
+# Create a 3-way contingency table; risk, reliability, type
+# ----------------------------------------------------------
+av$simpleType <- as.character(av$Type)
+# Group all nodes with multiple categories into a new category
+av$simpleType[grep(';', av$simpleType)] <- "Multiples"
+# Turn it into a factor again
+av$simpleType <- factor(av$simpleType)
+
+rrt.df = data.frame(table(av$Risk, av$Reliability, av$simpleType))
+colnames(rrt.df) <- c("Risk","Reliability","simpleType","Freq")
+levelplot(Freq ~ Reliability*Risk|simpleType, data=rrt.df,
+          main="Risk ~ Reliability | Type", ylab="Risk", xlab="Reliability", shrink=c(0.5,1),
+          col.regions=colorRampPalette(c("#efefef","#990000"))(20))
+
+# Listing 3-24
+# Remove the Scanning Host type from the graph
+# ------------------------------------------------
+
+rrt.df <- subset(rrt.df, simpleType != "Scanning Host")
+levelplot(Freq ~ Reliability*Risk|simpleType, data=rrt.df,
+          main="Risk ~ Reliability | Type", ylab="Risk", xlab="Reliability", shrink=c(0.5,1),
+          col.regions=colorRampPalette(c("#efefef","#990000"))(20))
+
+# Listing 3-26
+# Remove Malware Distribution and Malware Domain as well
+# -------------------------------------------------------
+rrt.df <- subset(rrt.df,
+                 !(simpleType %in% c("Malware distribution","Malware Domain")))
+
+sprintf("Count: %d; Percent: %2.1f%%", 
+        sum(rrt.df$Freq), 100*sum(rrt.df$Freq)/nrow(av))
+
+levelplot(Freq ~ Reliability*Risk|simpleType, data=rrt.df,
+          main="Risk ~ Reliability | Type", ylab="Risk", xlab="Reliability", shrink=c(0.5,1),
+          col.regions=colorRampPalette(c("#efefef","#990000"))(20))
