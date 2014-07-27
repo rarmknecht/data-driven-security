@@ -111,4 +111,27 @@ gg <- gg + theme(panel.grid=element_blank(),
                  panel.background=element_blank())
 print(gg)
 
+# Listing 3-19
+# Contingency Table for Risk & Reliability
+# -----------------------------------------
+rr.tab <- xtabs(~Risk+Reliability, data=av)
+ftable(rr.tab)
+# need to use the levelplot function from lattice package
+library(lattice)
+# cast the table into a dataframe
+rr.df = data.frame(table(av$Risk, av$Reliability))
+# set the column names since table uses Var1 and Var2
+colnames(rr.df) <- c("Risk", "Reliability", "Freq")
+levelplot(Freq~Risk*Reliability, data=rr.df, main="Risk ~ Reliability", ylab="Reliability",
+          xlab="Risk", shrink=c(0.5,1),col.regions=colorRampPalette(c("#dcefdc","#990000"))(20))
 
+# Listing 3-22
+# Generate same plot from random sample
+# ---------------------------------------
+set.seed(1492)
+rel=sample(1:7,260000,replace=T)
+rsk=sample(1:10,260000,replace=T)
+tmp.df = data.frame(table(factor(rsk),factor(rel)))
+colnames(tmp.df) <- c("Risk","Reliability","Freq")
+levelplot(Freq~Risk*Reliability, data=tmp.df, main="Risk ~ Reliability", ylab="Reliability",
+          xlab="Risk", shrink=c(0.5,1),col.regions=colorRampPalette(c("#dcefdc","#990000"))(20))
