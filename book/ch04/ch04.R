@@ -195,3 +195,132 @@ gg3 <- gg3 + theme(axis.text.x = element_text(angle=90, hjust=1),
                    panel.background=element_blank(),
                    legend.position="none")
 gg3
+
+##
+##  Recommended Reading:
+##  http://statisticssolutions.com/academic-solutions/resources
+##        /directory-of-statistical-analyses
+##        /correlation-pearson-kendall-spearman/
+##
+
+# Listing 4-9 / Plot Block Count vs. AV Count
+# --------------------------------------------
+
+gg <- ggplot(data=combined.df)
+gg <- gg + geom_point(aes(x=IANA.Block.Count,
+                          y=AlienVault.IANA.Count),
+                      color=set2[1], size=4)
+gg <- gg + labs(x="IANA Block Count", y="Alien Vault Count",
+                title="IANA ~ Alien Vault")
+gg <- gg + theme(axis.text.x = element_text(angle=90,hjust=1),
+                 panel.background = element_blank(),
+                 legend.position = "none")
+gg
+
+# check the correlation
+cor(combined.df$IANA.Block.Count,
+    combined.df$AlienVault.IANA.Count, method="spearman")
+
+# Listing 4-11 / Prepare for Zeus Analysis
+# -----------------------------------------
+
+zeusURL <- "https://zeustracker.abuse.ch/blocklist.php?download=ipblocklist"
+zeusData <- "data/zeus.csv"
+if(file.access(zeusData)) {download.file(zeusURL,zeusData)}
+zeus <- read.table(zeusData,skip=5,header=FALSE,col.names=c("IP"))
+
+# HELPER FUNCTION MENTIONED IN THE BOOK
+# BUT NOT IN THE PRINTED LISTINGS
+
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+
+# HELPER FUNCTION MENTIONED IN THE BOOK
+# BUT NOT IN THE PRINTED LISTINGS
+
+BulkOrigin <- function(ip.list,host="v4.whois.cymru.com",port=43) {
+  
+  # setup query
+  cmd <- "begin\nverbose\n" 
+  ips <- paste(unlist(ip.list), collapse="\n")
+  cmd <- sprintf("%s%s\nend\n",cmd,ips)
+  
+  # setup connection and post query 
+  con <- socketConnection(host=host,port=port,blocking=TRUE,open="r+")  
+  cat(cmd,file=con)
+  response <- readLines(con)
+  close(con)
+  
+  # trim header, split fields and convert results
+  response <- response[2:length(response)]
+  response <- laply(response,.fun=function(n) {
+    sapply(strsplit(n,"|",fixed=TRUE),trim)
+  })
+  response <- adply(response,c(1))
+  response <- subset(response, select = -c(X1) )
+  names(response) = c("AS","IP","BGP.Prefix","CC",
+                      "Registry","Allocated","AS.Name")
+  
+  return(response)
+  
+}
+
+# HELPER FUNCTION MENTIONED IN THE BOOK
+# BUT NOT IN THE PRINTED LISTINGS
+
+BulkPeer <- function(ip.list,host="v4-peer.whois.cymru.com",port=43) {
+  
+  # setup query
+  cmd <- "begin\nverbose\n" 
+  ips <- paste(unlist(ip.list), collapse="\n")
+  cmd <- sprintf("%s%s\nend\n",cmd,ips)
+  
+  # setup connection and post query
+  con <- socketConnection(host=host,port=port,blocking=TRUE,open="r+")  
+  cat(cmd,file=con)
+  response <- readLines(con)
+  close(con)
+  
+  # trim header, split fields and convert results
+  response <- response[2:length(response)]
+  response <- laply(response,function(n) {
+    sapply(strsplit(n,"|",fixed=TRUE),trim)
+  })  
+  response <- adply(response,c(1))
+  response <- subset(response, select = -c(X1) )
+  names(response) <- c("Peer.AS","IP","BGP.Prefix","CC",
+                       "Registry","Allocated","Peer.AS.Name")
+  return(response)
+  
+}
+
+# HELPER FUNCTION MENTIONED IN THE BOOK
+# BUT NOT IN THE PRINTED LISTINGS
+
+BulkOriginASN <- function(asn.list,host="v4.whois.cymru.com",port=43) {
+  
+  # setup query
+  cmd <- "begin\nverbose\n" 
+  ips <- paste(unlist(asn.list), collapse="\n")
+  cmd <- sprintf("%s%s\nend\n",cmd,ips)
+  
+  # setup connection and post query
+  con <- socketConnection(host=host,port=port,blocking=TRUE,open="r+")  
+  cat(cmd,file=con)
+  response <- readLines(con)
+  close(con)
+  
+  # trim header, split fields and convert results
+  
+  response <- response[2:length(response)]
+  response <- laply(response,.fun=function(n) {
+    sapply(strsplit(n,"|",fixed=TRUE),trim)
+  })
+  
+  response <- adply(response,c(1))
+  response <- subset(response, select = -c(X1) )
+  names(response) <- c("AS","CC","Registry","Allocated","AS.Name")
+  
+  return(response)
+  
+}
+
