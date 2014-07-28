@@ -8,7 +8,7 @@ setwd(paste("~",location,"book/ch04",sep=""))
 
 # ensure necessary packages are installed
 pkg <- c("bitops","ggplot2","maps","maptools",
-         "sp","grid","car")
+         "sp","grid","car","reshape","gridExtra")
 new.pkg <- pkg[!(pkg %in% installed.packages())]
 if(length(new.pkg)) {install.packages(new.pkg)}
 
@@ -97,3 +97,101 @@ gg <- gg + labs(x="", y="")
 gg <- gg + theme(panel.background=element_rect(fill=alpha(set2[3],0.2),
                                                colour="white"))
 gg
+
+# Listing 4-5 / Incorporate IANA Data
+# -------------------------------------
+
+# read in the iana data
+iana.data <- "data/ipv4-address-space.csv"
+iana <- read.csv(iana.data)
+
+# clean up the iana prefix
+iana$Prefix <- sub("^(00|0)","",iana$Prefix, perl=TRUE)
+iana$Prefix <- sub("/8$","",iana$Prefix, perl=TRUE)
+
+# define vectorized function to strip 'n' characters from a string
+rstrip <- function(x,n) {
+  substr(x, 1, nchar(x)-n)
+}
+
+# extract just the prefix from the Alien Vault listing
+library(stringr)
+av.IP.prefix <- rstrip(str_extract(as.character(av.df$IP),
+                                   "^([0-9]+)\\."),1)
+
+# there are faster ways than "sapply()" but the point is to 
+# understand the general "apply" pattern as we will use it quite a bit
+av.df$Designation <- sapply(av.IP.prefix, function(ip) {
+  iana[iana$Prefix == ip, ]$Designation
+})
+
+# Listing 4-6 / Merge IANA Designations w/ AV
+# ----------------------------------------------------
+
+# create a new data frame from the iana designation factors
+iana.df <- data.frame(table(factor(iana$Designation)))
+colnames(iana.df) <- c("Registry","IANA.Block.Count")
+
+# make a data frame of the counts of the av iana designation factors
+tmp.df <- data.frame(table(factor(av.df$Designation)))
+colnames(tmp.df) <- c("Registry","AlienVault.IANA.Count")
+
+# merge (join) the data frames on the reg column
+combined.df <- merge(iana.df, tmp.df)
+print(combined.df[with(combined.df, order(-IANA.Block.Count)),],
+      row.names=FALSE)
+
+# Listing 4-7 / Plot the table of AlienVault vs. IANA
+# -----------------------------------------------------
+
+library(reshape)
+library(grid)
+library(gridExtra)
+
+# normalize the IANA and AV values to % so bar chart scales
+# match and make it easier to compare
+combined.df$IANA.pct <- 100 * (combined.df$IANA.Block.Count / 
+                                 sum(combined.df$IANA.Block.Count))
+combined.df$AV.pct <- 100 * (combined.df$AlienVault.IANA.Count / 
+                               sum(combined.df$AlienVault.IANA.Count))
+
+combined.df$IANA.vs.AV.pct <- combined.df$IANA.pct - combined.df$AV.pct
+
+melted.df <- melt(combined.df)
+# plot the new melted data frame values
+gg1 <- ggplot(data=melted.df[melted.df$variable=="IANA.pct",],
+              aes(x=reorder(Registry, -value), y=value))
+gg1 <- gg1 + ylim(0,40)
+gg1 <- gg1 + geom_bar(stat="identity", fill=set2[3])
+gg1 <- gg1 + labs(x="Registry", y="%", title="IANA %")
+gg1 <- gg1 + coord_flip()
+gg1 <- gg1 + theme(axis.text.x = element_text(angle=90, hjust=1),
+                   panel.background=element_blank(),
+                   legend.position="none")
+
+gg2 <- ggplot(data=melted.df[melted.df$variable=="AV.pct",],
+              aes(x=reorder(Registry, -value), y=value))
+gg2 <- gg2 + ylim(0,40)
+gg2 <- gg2 + geom_bar(stat="identity", fill=set2[3])
+gg2 <- gg2 + labs(x="Registry", y="%", title="AlienVault %")
+gg2 <- gg2 + coord_flip()
+gg2 <- gg2 + theme(axis.text.x = element_text(angle=90, hjust=1),
+                   panel.background=element_blank(),
+                   legend.position="none")
+
+# use grid to precisely arrange multiple ggplot objects
+grid.arrange(gg1,gg2,ncol=1,nrow=2)
+
+# Listing 4-8 / Comparison based on Block Size
+# ----------------------------------------------
+
+gg3 <- ggplot(data=combined.df,
+              aes(x=reorder(Registry, -IANA.Block.Count), y=AV.pct))
+gg3 <- gg3 + geom_bar(stat="identity", fill=set2[4])
+gg3 <- gg3 + labs(x="Registry", y="Count", 
+                  title="AV/IANA by IANA (low-to-high)")
+gg3 <- gg3 + coord_flip()
+gg3 <- gg3 + theme(axis.text.x = element_text(angle=90, hjust=1),
+                   panel.background=element_blank(),
+                   legend.position="none")
+gg3
