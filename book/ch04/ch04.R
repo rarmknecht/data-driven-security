@@ -358,3 +358,14 @@ g <- delete.vertices(g, which(degree(g) < 1))
 E(g)$arrow.size <- 0
 V(g)[grep("\\.", V(g)$name)]$name <- ""
 
+# Listing 4-13 / Graph the generated graph structure
+# The greater the itterartions, the cleaner the graph will look
+# --------------------------------------------------------------
+L <- layout.fruchterman.reingold(g,niter=100000, area=30*vcount(g)^2)
+par(bg='white', mfrow=c(1,1))
+plot(g, margin=0, layout=L, vertex.label.dist=0.5,
+     vertex.label.cex=0.75,
+     vertex.label.color='black',
+     vertex.label.family='sans',
+     vertex.label.font=2,
+     main="Zeus botnet nodes clustered by country")
