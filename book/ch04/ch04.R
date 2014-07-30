@@ -8,7 +8,8 @@ setwd(paste("~",location,"book/ch04",sep=""))
 
 # ensure necessary packages are installed
 pkg <- c("bitops","ggplot2","maps","maptools",
-         "sp","grid","car","reshape","gridExtra")
+         "sp","grid","car","reshape","gridExtra",
+         "igraph","plyr","colorspace")
 new.pkg <- pkg[!(pkg %in% installed.packages())]
 if(length(new.pkg)) {install.packages(new.pkg)}
 
@@ -323,4 +324,37 @@ BulkOriginASN <- function(asn.list,host="v4.whois.cymru.com",port=43) {
   return(response)
   
 }
+
+# Listing 4-12 / Zeus Graph Structure by Country
+# ----------------------------------------------)----
+
+library(igraph)
+library(plyr)
+library(colorspace)
+
+ips <- as.character(zeus$IP)
+
+# get bgp origin data & peer data
+origin <- BulkOrigin(ips)
+# start graphing
+g <- graph.empty()
+# IP endpoints are red
+g <- g + vertices(ips, size=4, color=set2[4], group=1)
+# Make BGP vertices
+g <- g + vertices(origin$CC, size=4, color=set2[2], group=2)
+# for each IP, get the origin AS CC and return as a pair to 
+# create the IP -> CC edge list
+ip.cc.edges <- lapply(ips, function(x){
+  #iCC <- origin[origin$IP==x]$CC   # this is what the book had
+  iCC <- subset(origin,IP==x)$CC    # I changed it to this
+  lapply(iCC, function(y){c(x,y)})
+})
+
+g <- g + edges(unlist(ip.cc.edges))
+# simplify graph by combining common edges
+g <- g + simplify(g, edge.attr.comb=list(weight="sum"))
+# remove "one off ASN's", delete vertex with degree of 0
+g <- delete.vertices(g, which(degree(g) < 1))
+E(g)$arrow.size <- 0
+V(g)[grep("\\.", V(g)$name)]$name <- ""
 
