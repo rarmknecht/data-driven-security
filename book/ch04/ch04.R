@@ -369,3 +369,12 @@ plot(g, margin=0, layout=L, vertex.label.dist=0.5,
      vertex.label.family='sans',
      vertex.label.font=2,
      main="Zeus botnet nodes clustered by country")
+
+# Listing 4-14 / Translation table for country codes
+# ----------------------------------------------------
+zeus.cc <- grep("[A-Z]",V(g)$name, value=TRUE)
+zeus.cc <- zeus.cc[order(zeus.cc)]
+# read in the country code data
+cc.df <- read.csv("data/countrycode_data.csv")
+# display cc & name for just our data set
+print(head(cc.df[cc.df$iso2c %in% zeus.cc, c(7,1)], n=10), row.names=FALSE)
