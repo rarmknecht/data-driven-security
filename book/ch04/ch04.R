@@ -378,3 +378,243 @@ zeus.cc <- zeus.cc[order(zeus.cc)]
 cc.df <- read.csv("data/countrycode_data.csv")
 # display cc & name for just our data set
 print(head(cc.df[cc.df$iso2c %in% zeus.cc, c(7,1)], n=10), row.names=FALSE)
+
+# Listing 4-16 / Firewall Data + Alienvault
+# --------------------------------------------------
+avRep <- "data/reputation.data"
+av.df <- read.csv(avRep,sep="#",header=FALSE)
+colnames(av.df) <- c("IP","Reliability","Risk","Type","Country","Locale","Coords","x")
+
+# read in firewall log ips
+dest.ips <- read.csv("data/dest.ips", col.names=c("IP"))
+
+# table of reliability of seen ips
+table(av.df[av.df$IP %in% dest.ips$IP, ]$Reliability)
+
+# extract only bad IPs (reliability > 6)
+ips <- as.character(av.df[(av.df$IP %in% dest.ips$IP) &
+                            (av.df$Reliability > 6), ]$IP)
+
+graph.cc <- function(ips, alien.vault.df, show.plot=TRUE) {
+  
+  options("warn" = -1)
+  
+  # Lookup ASN info for the incoming IP list which will
+  # have country of origin info that's fairly accurate
+  origin <- BulkOrigin(ips)
+  
+  # filter out IP and Type from the alienvault DB only for our ip list
+  ips.types <- alien.vault.df[alien.vault.df$IP %in% ips,c(1,2,4)]
+  
+  # get a tabular summary of the types and counts
+  ftab <- table(factor(ips.types[ips.types$IP %in% ips,]$Type))
+  
+  # build a color table from the tabular summary
+  # myColors <- rainbow_hcl(length(names(ftab)),c=60,l=70,start=20)
+  myColors <- set2
+  col.df <- data.frame(Type=names(ftab),Color=myColors)
+  
+  # begin graph creation
+  g <- graph.empty()
+  
+  # add our ip list as the starting vertices
+  g <- g + vertices(ips,size=3,group=1)
+  
+  # i don't the df is necessary anymore...will test later
+  ips.df <- data.frame(ips)
+  colnames(ips.df) <- c("IP")
+  
+  # get the current list of vertex names...i think i can remove this too
+  v.names <- V(g)$name
+  
+  # assign colors to the vertices based on the type
+  V(g)$color <- as.character(col.df[col.df$Type %in% ips.types[ips.types$IP %in% v.names,]$Type,]$Color)
+  
+  # add country vertices
+  g <- g + vertices(
+    unique(origin$CC),
+    size=3,color="black",group=2)
+  
+  # build country->ip edges
+  ip.cc.edges <- lapply(ips,function(x) {
+    iCC <- origin[origin$IP==x,]$CC
+    lapply(iCC,function(y){
+      c(x,y)
+    })
+  })
+  
+  # add edges
+  g <- g + edges(unlist(ip.cc.edges))
+  
+  # simplify (though it's almost not necessary given the low
+  # complexity of the graph)
+  g <- simplify(g, edge.attr.comb=list(weight="sum"))
+  
+  # remove lone wolf vertices
+  g <- delete.vertices(g, which(degree(g) < 1))
+  
+  # arrows: ugh
+  E(g)$arrow.size <- 0
+  
+  # we only want to see country labels, not IPs
+  V(g)[grep("[0-9]",V(g)$name)]$name <- ""
+  
+  # 10000 makes pretty graphs and takes a pretty long time
+  L <- layout.fruchterman.reingold(g, niter=10000, area=30*vcount(g)^2)
+  
+  # for when I add community options
+  c <- walktrap.community(g, steps=10)
+  v <- evcent(g)$vector
+  
+  if (show.plot) {
+    def.par <- par(no.readonly = TRUE)
+    par(bg = 'white')
+    layout(matrix(c(1,2,3,1), 1, 2, byrow = TRUE), widths=c(5,1))
+    plot(g,margin=0,layout=L,vertex.label.dist=0.6, 
+         vertex.label.cex=0.75, 
+         vertex.label.color="black",
+         vertex.label.family="sans", 
+         vertex.label.font=2)
+    par(mar=c(5,0,2,2))
+    barplot(ftab,horiz=TRUE,las=1,cex.names=0.75,cex.axis=0.75,
+            col=as.character(col.df[col.df$Type %in% unlist(labels(ftab)),]$Color))
+    par(def.par)
+  }
+  
+  options("warn" = 0)
+  
+  return(g)
+}
+
+# ADDITIONAL HELPER FUNCTION MENTIONED IN THE BOOK BUT NOT PRINTED
+
+graph.asn <- function(ips,alien.vault.df,add.peers=FALSE,show.plot=TRUE,show.labels=FALSE) {
+  
+  options("warn" = -1)
+  
+  # Lookup ASN info for the incoming IP list
+  origin <- BulkOrigin(ips)
+  
+  if (add.peers) { # and peers if specified
+    peers <- BulkPeer(ips)
+  }
+  
+  # filter out IP and Type from the alienvault DB only for our ip list
+  ips.types <- alien.vault.df[alien.vault.df$IP %in% ips,c(1,2,4)]
+  
+  # get a tabular summary of the types and counts
+  ftab <- table(factor(ips.types[ips.types$IP %in% ips,]$Type))
+  
+  # build a color table from the tabular summary
+  #myColors <- rainbow_hcl(length(names(ftab)),c=60,l=70,start=20)
+  myColors <- set2
+  col.df <- data.frame(Type=names(ftab),Color=myColors)
+  
+  # begin graph creation
+  g <- graph.empty()
+  
+  # add our ip list as the starting vertices
+  g <- g + vertices(ips,size=3,group=1)
+  
+  # i don't think the df is necessary anymore...will test later
+  ips.df <- data.frame(ips)
+  colnames(ips.df) <- c("IP")
+  
+  # get the current list of vertex names...i think i can remove this too
+  v.names <- V(g)$name
+  
+  # assign colors to the vertices based on the type
+  V(g)$color <- as.character(col.df[col.df$Type %in% ips.types[ips.types$IP %in% v.names,]$Type,]$Color)
+  
+  # add BGP->IP vertices and - if requested - add peer ASN vertices
+  if (add.peers) { 
+    g <- g + vertices(
+      unique(c(peers$Peer.AS, origin$AS)),
+      size=4,color="black",group=2)
+  } else {
+    g <- g + vertices(
+      unique(origin$AS),
+      size=4,color="black", group=2)
+  }
+  
+  # Make IP/BGP edges
+  ip.edges <- lapply(ips,function(x) {
+    iAS <- origin[origin$IP==x,]$AS
+    lapply(iAS,function(y){
+      c(x,y)
+    })
+  })
+  
+  if (add.peers) { # same for peers if specified
+    bgp.edges <- lapply(
+      grep("NA",unique(origin$BGP.Prefix),value=TRUE,invert=TRUE),
+      function(x) {
+        startAS <- unique(origin[origin$BGP.Prefix==x,]$AS)
+        lapply(startAS,function(z) {
+          pAS <- peers[peers$BGP.Prefix==x,]$Peer.AS
+          lapply(pAS,function(y) {
+            c(z,y)
+          })
+        })
+      })
+  }
+  
+  # build ASN->IP edges
+  g <- g + edges(unlist(ip.edges))
+  
+  if (add.peers) { # same for peers if specified
+    g <- g + edges(unlist(bgp.edges))
+  }
+  
+  # simplify the structure (prbly needed since it's already
+  # well organized w/o dupes
+  g <- simplify(g, edge.attr.comb=list(weight="sum"))
+  
+  # delete any standalone vertices (lone wolf ASNs)
+  g <- delete.vertices(g, which(degree(g) < 1))
+  
+  # arrows: ugh
+  E(g)$arrow.size <- 0
+  
+  # if we do show labels, we only want to see the ASNs
+  V(g)[grep("\\.",V(g)$name)]$name <- ""
+  
+  # 10000 makes it pretty...and pretty slow
+  L <- layout.fruchterman.reingold(g, niter=10000, 
+                                   area=30*vcount(g)^2)
+  
+  # shld make an options parameter and if-block this
+  c <- walktrap.community(g, steps=10)
+  v <- evcent(g)$vector
+  
+  if (show.plot) {
+    def.par <- par(no.readonly = TRUE)
+    par(bg = 'white')
+    layout(matrix(c(1,2,3,1), 1, 2, byrow = TRUE),
+           widths=c(5,1))
+    if (show.labels) {
+      plot(g,
+           margin=0,
+           layout=L,
+           vertex.label.dist=0.6, 
+           vertex.label.cex=0.75, 
+           vertex.label.color="black",
+           vertex.label.family="sans", 
+           vertex.label.font=2)
+    } else {
+      plot(g,margin=0,vertex.label=NA,layout=L)      
+    }
+    par(mar=c(5,0,2,2))
+    barplot(ftab,horiz=TRUE,las=1,cex.names=0.75,cex.axis=0.75,
+            col=as.character(
+              col.df[col.df$Type %in% unlist(labels(ftab)),]$Color))
+    par(def.par)
+  }
+  
+  options("warn" = 0)
+  return(g)
+}
+
+
+g.cc <- graph.cc(ips,av.df)
+
